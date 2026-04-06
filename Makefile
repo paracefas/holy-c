@@ -1,0 +1,2 @@
+holy-c.exe: main.cpp holy-c.hpp combinators.hpp ast.hpp util.hpp lexer.hpp parser.hpp
+	g++ -std=c++26 -I "C:\Users\Teologado-6\Documents\Fr. Emanuel\dev\cpp\fmt\include" main.cpp -lstdc++exp -fno-diagnostics-show-option -fmax-errors=1 -o holy-c.exe
