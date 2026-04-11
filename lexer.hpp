@@ -28,7 +28,7 @@ auto lexDouble = [](std::string in) -> Result<Token> {
 
 #include <array>
 
-const std::array keywords { "return", "func", "int", "string", "double" }; 
+const std::array keywords { "return", "func", "int", "string", "double", "let", "const" }; 
 
 bool is_keyword (std::string s) {
     for (const std::string& keyword : keywords)
@@ -36,7 +36,6 @@ bool is_keyword (std::string s) {
     return false;
 }
 
-// Reconoce un Keyword o ID: "return" -> Token(KEYWORD, "return")
 auto lexID = [](std::string in) -> Result<Token> {
     std::regex re("^[a-zA-Z_][a-zA-Z0-9_]*");
     std::smatch m;
@@ -48,7 +47,6 @@ auto lexID = [](std::string in) -> Result<Token> {
     return {std::nullopt, in};
 };
 
-// Reconoce Símbolos: "(" -> Token(PAR_OPN, "(")
 auto lexSymbol = [](std::string in) -> Result<Token> {
     if (in.empty()) return {std::nullopt, in};
     char c = in[0];
@@ -63,6 +61,7 @@ auto lexSymbol = [](std::string in) -> Result<Token> {
     if (c == '*') return { std::tuple{Token(token_t::MULT, "*")}, in.substr(1) };
     if (c == '/') return { std::tuple{Token(token_t::DIV, "/")}, in.substr(1) };
     if (c == '=') return { std::tuple{Token(token_t::EQ, "=")}, in.substr(1) };
+    if (c == ':') return { std::tuple{Token(token_t::COLON, ":")}, in.substr(1) };
     return {std::nullopt, in};
 };
 
