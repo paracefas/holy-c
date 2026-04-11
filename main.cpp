@@ -1,22 +1,16 @@
 #include "./holy-c.hpp"
 
-int main() {
-    auto input = load_source("examples/hello_world.hc");
-    if (input) {
-        std::println("Leído con éxito: {} caracteres", input->size());
-    } else {
-        std::println(stderr, "Error código: {}", (int)input.error());
-        return -1;
-    }
-    auto [res, rest] = parseFunc(*input);
 
-    if (res) {
-        Stmt mi_sentencia = std::get<0>(*res);
-        std::println("¡Parseo exitoso!");
+int main(int argc, char const** argv) {
+    auto input = load_source(argv[1]);
+    auto [ast, rest] = parse(*input); 
 
-        std::println("{}", mi_sentencia);
+    if (ast) {
+        auto& [program] = *ast;
+        std::println("Exito");
+        std::println("{}", rest);
     } else {
-        std::println("Error: No se pudo parsear. Resto del input: '{}'", rest);
+        std::println("Error de parseo.");
     }
     return 0;
 }

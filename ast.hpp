@@ -9,16 +9,19 @@
 	X(CURLY_OPN, "CURLY_OPN") \
 	X(CURLY_CLS, "CURLY_CLS") \
 	X(IDENTIFIER, "IDENTIFIER") \
-	X(PLUS_OP, "PLUS_OP") \
-	X(MINS_OP, "MINS_OP") \
-	X(MULT_OP, "MULT_OP") \
-	X(DIVI_OP, "DIVI_OP") \
 	X(STR, "STR") \
 	X(UNDEFINED, "UNDEFINED") \
 	X(INT, "INT") \
     X(KEYWORD, "KEYWORD") \
     X(DOUBLE, "DOUBLE") \
     X(SYM, "Symbol") \
+    X(COMMA, "COMMA") \
+    X(SEMI, "SEMICOLON") \
+    X(PLUS, "PLUS") \
+    X(MINUS, "MINUS") \
+    X(DIV, "DIV") \
+    X(MULT, "MULT") \
+    X(EQ, "EQ") \
 	X(EoF, "End of File")
 
 enum class token_t {
@@ -91,18 +94,20 @@ struct FunctionCall;
 struct ReturnStmt;
 struct FunctionDef;
 struct FunctionArg;
+struct BinaryOp;
 
 using Expr = std::variant<
     double,
     int, 
     std::string,
     RecursiveWrapper<FunctionCall>,
-    RecursiveWrapper<ReturnStmt>
+    RecursiveWrapper<ReturnStmt>,
+    RecursiveWrapper<BinaryOp>
     >;
 
 using Stmt = std::variant<
-    RecursiveWrapper<ReturnStmt>,
     RecursiveWrapper<FunctionDef>,
+    RecursiveWrapper<ReturnStmt>,
     Expr
 >;
 
@@ -129,6 +134,11 @@ struct FunctionDef {
 struct FunctionArg {
     std::string name;
     token_t type;
+};
+
+struct BinaryOp {
+    Expr lhs, rhs;
+    char op;
 };
 
 struct ASTPrinter {

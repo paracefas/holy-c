@@ -15,7 +15,7 @@ auto match (token_t expected) {
         trimmed.erase(0, trimmed.find_first_not_of(" \t\n\r"));
         
         if (trimmed.empty()) return {std::nullopt, in};
-        auto [res, rest] = lexer(trimmed); // El lexer funcional hace el trabajo sucio
+        auto [res, rest] = lexer(trimmed); 
         
         if (res && std::get<0>(*res).token_type == expected) {
             return {res, rest};
@@ -23,6 +23,20 @@ auto match (token_t expected) {
         return {std::nullopt, in};
     };
 }
+
+auto keyword = [](std::string word) {
+    return [word](std::string in) -> Result<Token> {
+        auto res = match(token_t::KEYWORD)(in);
+        if (!res.first.has_value())
+            return {std::nullopt, in};
+
+        auto w = std::get<std::string>(std::get<0>(res.first.value()).token_value);
+        if (w == word) 
+            return res;
+
+        return {std::nullopt, in};
+    };
+};
 
 auto parseInt = map(
     match(token_t::INT), 
@@ -45,7 +59,45 @@ auto parseStr = map(
     } 
 );
 
+auto parsePlus = map(
+    match(token_t::PLUS),
+    [] (Token t) -> char  { return '+'; }
+);
+
+auto parseMinus = map(
+    match(token_t::MINUS),
+    [] (Token t) -> char  { return '-'; }
+);
+
+auto parseMult = map(
+    match(token_t::MULT),
+    [] (Token t) -> char  { return '*'; }
+);
+
+auto parseDiv = map(
+    match(token_t::DIV),
+    [] (Token t) -> char  { return '/'; }
+);
+
+auto parseOp = choice(parsePlus, parseMinus, parseMult, parseDiv);
+
+auto parseBinaryOp = map(
+    seq(
+        match(token_t::INT),
+        parseOp,
+        match(token_t::INT)
+    ),
+    [](Token lhs, char op, Token rhs) -> Expr {
+        std::println("Parsing binop");
+        Expr a = std::get<int>(lhs.token_value);
+        Expr b = std::get<int>(rhs.token_value);
+        std::println("\t{} {} {}", std::get<int>(a), op, std::get<int>(b));
+        return RecursiveWrapper<BinaryOp>{BinaryOp{a, b, op}};
+    }
+);
+
 auto parseExpr = choice(
+    parseBinaryOp,
     map(parseDouble, [](double d) -> Expr {return d;}),
     map(parseInt, [](int i) -> Expr {return i;}),
     map(parseStr, [](std::string s) -> Expr {return s;})
@@ -73,18 +125,32 @@ auto parseParCls = map(
     [](Token) -> std::monostate { return {}; });
 
 auto parseReturn = map(
-    seq(match(token_t::KEYWORD), parseExpr),
+    seq(keyword("return"), parseExpr),
     [](Token kw, auto val) -> Stmt {
-        if (std::get<std::string>(kw.token_value) == "return") {
-            Expr valr = val;
-            return make_stmt(ReturnStmt{ valr }); // Se envuelve en RecursiveWrapper automáticamente
+        // 1. 'val' ya es de tipo Expr (gracias al retorno de parseExpr)
+        Expr valr = val;
+
+        // 2. Comprobación segura: ¿Es realmente una BinaryOp?
+        // Usamos std::get_if para evitar que el programa explote si el return no es una suma
+        if (auto* wrapper = std::get_if<RecursiveWrapper<BinaryOp>>(&valr)) {
+            const BinaryOp& op = wrapper->get();
+            
+            // 3. lhs también es una Expr, hay que sacar el int de ella
+            if (auto* l_val = std::get_if<int>(&op.lhs)) {
+                std::println("Parsing return con primer operando: {}", *l_val);
+            } else {
+                std::println("Parsing return con operando izquierdo complejo.");
+            }
+        } else if (auto* i_val = std::get_if<int>(&valr)) {
+            std::println("Parsing return simple: {}", *i_val);
         }
-        throw std::runtime_error("Se esperaba 'return' pero se encontró otra cosa");
+
+        return make_stmt(ReturnStmt{ valr });
     }
 );
 
 auto parseComma = map(
-    match(token_t::SYM),
+    match(token_t::COMMA),
     [](Token t) -> std::monostate { return {}; }
 );
 
@@ -104,24 +170,69 @@ auto parseSingleArg = map(
 );
 
 auto parseArgs = [](std::string in) -> Result<std::vector<FunctionArg>> {
-    auto [first, rest1] = parseSingleArg(in);
-    if (!first) return { std::vector<FunctionArg>{}, in }; 
     std::vector<FunctionArg> args;
-    args.push_back(std::get<0>(*first));
-
-    auto nextArgsParser = many(map(seq(parseComma, parseSingleArg), [](auto, FunctionArg a) { return a; }));
-    auto [others, rest2] = nextArgsParser(rest1);
     
-    if (others) {
-        for (auto& a : std::get<0>(*others)) args.push_back(std::move(a));
+    // 1. Intentar el primer argumento
+    auto res1 = parseSingleArg(in);
+    
+    // Accedemos a .first para ver si el optional tiene valor
+    if (!res1.first) {
+        // Si no hay argumentos, devolvemos el vector vacío y el input original
+        return { std::optional<std::tuple<std::vector<FunctionArg>>>{std::vector<FunctionArg>{}}, in };
     }
 
-    return { std::tuple{args}, rest2 };
+    // Si tuvo éxito, extraemos la data y el nuevo resto (res1.second)
+    auto& first_data = *res1.first; 
+    args.push_back(std::get<0>(first_data));
+    std::string current_rest = res1.second;
+
+    // 2. Definir el parser para los argumentos adicionales (, int x)
+    auto nextArgsParser = many(
+        map(
+            seq(parseComma, parseSingleArg), 
+            [](std::monostate, FunctionArg a) { return a; }
+        )
+    );
+
+    // 3. Ejecutar el segundo parser sobre el resto actual
+    auto res2 = nextArgsParser(current_rest);
+    
+    if (res2.first) {
+        auto& others_vec = std::get<0>(*res2.first);
+        for (auto& a : others_vec) {
+            args.push_back(std::move(a));
+        }
+        // Retornamos el vector completo y el resto final tras la lista de argumentos
+        return { std::optional<std::tuple<std::vector<FunctionArg>>>{args}, res2.second };
+    }
+
+    // Si no hay más argumentos, devolvemos lo que tenemos y el resto tras el primer arg
+    return { std::optional<std::tuple<std::vector<FunctionArg>>>{args}, current_rest };
 };
 
-auto parseFunc = map(
+auto parseAssignation = map(
+    match(token_t::EQ),
+    [] (Token) -> char {
+        return '=';
+    }
+);
+
+auto parseFunc1 = map(
     seq(
-        match(token_t::KEYWORD), // func
+        keyword("func"),
+        parseID,
+        parseAssignation,
+        parseExpr
+    ),
+    [] (Token, std::string id, char, Expr ret) -> Stmt {
+        std::println("Parsing {}", id);
+        return make_stmt(FunctionDef{id, {}, {Stmt{ret}}});
+    }
+);
+
+auto parseFunc2 = map(
+    seq(
+        keyword("func"), // func
         parseID, // function name
         parseParOpn, // (
         parseArgs,
@@ -131,11 +242,14 @@ auto parseFunc = map(
         parseCurlyCls // }
     ),
     [](Token kw, std::string id, std::monostate, std::vector<FunctionArg> args, std::monostate, std::monostate, Stmt s, std::monostate) -> Stmt {
-        if (std::get<std::string>(kw.token_value) != "func") throw std::runtime_error("Se esperaba 'func' pero se encontró otra cosa");
-        
+        std::println("Parsing func");
         std::vector<Stmt> body;
         body.push_back(std::move(s));
         
         return make_stmt(FunctionDef{id, std::move(args), std::move(body)});
     }
 );
+
+auto parseFunc = choice(parseFunc2, parseFunc1);
+
+auto parse = many(choice(parseFunc, parseReturn));

@@ -56,7 +56,13 @@ auto lexSymbol = [](std::string in) -> Result<Token> {
     if (c == ')') return { std::tuple{Token(token_t::PAR_CLS, ")")}, in.substr(1) };
     if (c == '{') return { std::tuple{Token(token_t::CURLY_OPN, "{")}, in.substr(1) };
     if (c == '}') return { std::tuple{Token(token_t::CURLY_CLS, "}")}, in.substr(1) };
-    if (c == ',') return { std::tuple{Token(token_t::SYM, ",")}, in.substr(1) };
+    if (c == ',') return { std::tuple{Token(token_t::COMMA, ",")}, in.substr(1) };
+    if (c == ';') return { std::tuple{Token(token_t::SEMI, ";")}, in.substr(1) };
+    if (c == '+') return { std::tuple{Token(token_t::PLUS, "+")}, in.substr(1) };
+    if (c == '-') return { std::tuple{Token(token_t::MINUS, "-")}, in.substr(1) };
+    if (c == '*') return { std::tuple{Token(token_t::MULT, "*")}, in.substr(1) };
+    if (c == '/') return { std::tuple{Token(token_t::DIV, "/")}, in.substr(1) };
+    if (c == '=') return { std::tuple{Token(token_t::EQ, "=")}, in.substr(1) };
     return {std::nullopt, in};
 };
 
