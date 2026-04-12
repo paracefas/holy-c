@@ -23,13 +23,10 @@ struct OperandPrinter {
 std::string to_string(const Inst& i) {
     std::string s = "    " + i.op + " ";
     for (size_t idx = 0; idx < i.args.size(); ++idx) {
-        // 1. Visitamos el variant para obtener el string del operando
         std::string arg_str = std::visit(OperandPrinter{}, i.args[idx]);
         
-        // 2. Añadimos el string
         s += arg_str;
         
-        // 3. Si no es el último argumento, añadimos una coma y espacio
         if (idx < i.args.size() - 1) {
             s += ", ";
         }
@@ -40,9 +37,7 @@ std::string to_string(const Inst& i) {
 using AsmStream = std::vector<Inst>;
 
 struct FasmGenerator {
-    // 1. Manejo de Stmts conocidos
     AsmStream operator()(const RecursiveWrapper<ReturnStmt>& r) const {
-        // Importante: Aquí visitamos la expresión del return
         AsmStream code = std::visit(*this, r.get().value); 
         code.push_back({"call", {std::string("ExitProcess"), {}}});
         return code;
@@ -61,7 +56,6 @@ struct FasmGenerator {
         const auto& fn = f.get();
         AsmStream code;
         
-        // Si es la función 'main', la convertimos en el entry point 'start'
         std::string label_name = (fn.name == "main") ? "start" : fn.name;
 
         code.push_back({"label", {label_name}});
@@ -72,25 +66,18 @@ struct FasmGenerator {
             code.insert(code.end(), stmt_code.begin(), stmt_code.end());
         }
         
-        // ... epílogo ...
         return code;
     }
 
-    // 2. Manejo del Variant de Expresiones (el anidado)
-    // Esto resuelve el error "no type named 'type' in invoke_result"
-    //using ExprVariant = std::variant<double, int, std::string, RecursiveWrapper<FunctionCall>, RecursiveWrapper<ReturnStmt>>;
-    
     AsmStream operator()(const Expr& e) const {
-        return std::visit(*this, e); // Redirigimos al visitante específico de cada tipo de expr
+        return std::visit(*this, e);
     }
 
-    // 3. Manejo de los tipos hoja (Literales)
     AsmStream operator()(int i) const {
         return { {"mov", {Reg{"rcx"}, Imm{i}}} };
     }
 
     AsmStream operator()(double d) const {
-        // Por ahora, o lo manejas o devuelves vacío para que compile
         return { {"; literal double no soportado aun", {}} };
     }
 
@@ -108,26 +95,19 @@ struct FasmGenerator {
 std::string finalize_fasm_code(const AsmStream& instructions) {
     std::stringstream ss;
 
-    // --- 1. CABECERA Y FORMATO ---
-    ss << "format PE64 CONSOLE\n"; // Puedes cambiar a GUI si no quieres consola
+    ss << "format PE64 CONSOLE\n";
     ss << "entry start\n";
-    //ss << "include 'win64ax.inc'\n\n";
 
-    // --- 2. SECCIÓN DE CÓDIGO (.text) ---
     ss << "section '.text' code readable executable\n";
     
     for (const auto& inst : instructions) {
-        // Manejo especial para etiquetas (no llevan tabulación y terminan en ':')
         if (inst.op == "label") {
             ss << std::visit(OperandPrinter{}, inst.args[0]) << ":\n";
         } 
-        // Manejo para invoke (llamadas a la API de Windows)
         else if (inst.op == "call") {
-            std::println("entro");
             ss << "    call [" << std::visit(OperandPrinter{}, inst.args[0]);
             ss << "]\n";
         }
-        // Instrucciones estándar (mov, push, sub, etc.)
         else {
             ss << "    " << inst.op << " ";
             for (size_t i = 0; i < inst.args.size(); ++i) {

@@ -1,12 +1,15 @@
 #include "parser.hpp"
 
+#include "util.hpp"
+#include "lexer.hpp"
+
 ParserFunc match (token_t expected) {
     return [=](std::string in) -> Result<Token> {
         std::string trimmed = in;
         trimmed.erase(0, trimmed.find_first_not_of(" \t\n\r"));
         
         if (trimmed.empty()) return {std::nullopt, in};
-        std::println("[lexer: match] - {}", trimmed);
+        PRINT("[lexer: match] - {}", trimmed);
         auto [res, rest] = lexer(trimmed); 
         
         if (res && std::get<0>(*res).token_type == expected) {
@@ -66,7 +69,7 @@ Result<std::string> parseStr (std::string in) {
 Result<char> parsePlus (std::string in) {
     static auto p = map(
         match(token_t::PLUS),
-        [] (Token t) -> char  { return '+'; }
+        [] (Token) -> char  { return '+'; }
     );
 
     return p(in);
@@ -75,7 +78,7 @@ Result<char> parsePlus (std::string in) {
 Result<char> parseMinus (std::string in) {
     static auto p = map(
         match(token_t::MINUS),
-        [] (Token t) -> char  { return '-'; }
+        [] (Token) -> char  { return '-'; }
     );
 
     return p(in);
@@ -84,7 +87,7 @@ Result<char> parseMinus (std::string in) {
 Result<char> parseMult (std::string in) {
     static auto p = map(
         match(token_t::MULT),
-        [] (Token t) -> char  { return '*'; }
+        [] (Token) -> char  { return '*'; }
     );
 
     return p(in);
@@ -93,7 +96,7 @@ Result<char> parseMult (std::string in) {
 Result<char> parseDiv (std::string in) {
     static auto p = map(
         match(token_t::DIV),
-        [] (Token t) -> char  { return '/'; }
+        [] (Token) -> char  { return '/'; }
     );
 
     return p(in);
@@ -113,10 +116,10 @@ Result<Expr> parseBinaryOp (std::string in) {
             match(token_t::INT)
         ),
         [](Token lhs, char op, Token rhs) -> Expr {
-            std::println("Parsing binop");
+            PRINT("Parsing binop");
             Expr a = std::get<int>(lhs.token_value);
             Expr b = std::get<int>(rhs.token_value);
-            std::println("\t{} {} {}", std::get<int>(a), op, std::get<int>(b));
+            PRINT("\t{} {} {}", std::get<int>(a), op, std::get<int>(b));
             return RecursiveWrapper<BinaryOp>{BinaryOp{a, b, op}};
         }
     );
@@ -174,18 +177,18 @@ Result<std::monostate> parseParCls (std::string in) {
 Result<Stmt> parseReturn (std::string in) {
     static auto p =  map(
         seq(keyword("return"), parseExpr),
-        [](Token kw, auto val) -> Stmt {
+        [](Token, auto val) -> Stmt {
             Expr valr = val;
             if (auto* wrapper = std::get_if<RecursiveWrapper<BinaryOp>>(&valr)) {
                 const BinaryOp& op = wrapper->get();
                 
                 if (auto* l_val = std::get_if<int>(&op.lhs)) {
-                    std::println("Parsing return con primer operando: {}", *l_val);
+                    PRINT("Parsing return con primer operando: {}", *l_val);
                 } else {
-                    std::println("Parsing return con operando izquierdo complejo.");
+                    PRINT("Parsing return con operando izquierdo complejo.");
                 }
             } else if (auto* i_val = std::get_if<int>(&valr)) {
-                std::println("Parsing return simple: {}", *i_val);
+                PRINT("Parsing return simple: {}", *i_val);
             }
 
             return make_stmt(ReturnStmt{ valr });
@@ -197,7 +200,7 @@ Result<Stmt> parseReturn (std::string in) {
 Result<std::monostate> parseComma (std::string in) { 
     static auto p = map(
         match(token_t::COMMA),
-        [](Token t) -> std::monostate { return {}; }
+        [](Token) -> std::monostate { return {}; }
     );
     return p(in);
 }
@@ -294,7 +297,7 @@ Result<Stmt> parseLet (std::string in) {
             parseExpr
         ),
         [] (Token, std::string id, char, token_t t, char, Expr expr) -> Stmt {
-            std::println("Parsing let {}, type: {}", id, _token_n[t]);
+            PRINT("Parsing let {}, type: {}", id, _token_n[t]);
             return make_stmt(Expr{Let{id, t, expr}});
         }
     );
@@ -331,7 +334,7 @@ Result<Stmt> parseFunc1 (std::string in) {
             parseExpr
         ),
         [] (Token, std::string id, char, Expr ret) -> Stmt {
-            std::println("Parsing {}", id);
+            PRINT("Parsing {}", id);
             return make_stmt(FunctionDef{id, {}, {Stmt{ret}}});
         }
     );
@@ -349,8 +352,8 @@ Result<Stmt> parseFunc2 (std::string in) {
             parseParCls, // )
             parseBlock
         ),
-        [](Token kw, std::string id, std::monostate, std::vector<FunctionArg> args, std::monostate, std::vector<Stmt> body) -> Stmt {
-            std::println("Parsing func");
+        [](Token, std::string id, std::monostate, std::vector<FunctionArg> args, std::monostate, std::vector<Stmt> body) -> Stmt {
+            PRINT("Parsing func");
             return make_stmt(FunctionDef{id, std::move(args), std::move(body)});
         }
     );

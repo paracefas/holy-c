@@ -7,10 +7,11 @@ int main(int argc, char const** argv) {
 
     if (ast) {
         auto& [program] = *ast;
-        std::println("Exito");
-        std::println("{}", rest);
+
+        PRINT("Exito");
+        PRINT("{}", rest);
     } else {
-        std::println("Error de parseo.");
+        PRINT("Error de parseo.");
     }
     return 0;
 }

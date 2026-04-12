@@ -43,18 +43,14 @@ enum class token_t {
 extern std::unordered_map<token_t, std::string> _token_n;
 
 struct Token {
-    std::string token_name = "undefined";
-    token_t token_type = token_t::UNDEFINED;
+    std::string token_name;
+    token_t token_type;
     std::variant<double, int, std::string> token_value;
 
-    // Solo declaramos los constructores
     Token(token_t t, double v);
     Token(token_t t, int v);
     Token(token_t t, std::string v);
 
-    // El método 'update' tiene 'auto', así que debe quedarse aquí.
-    // Si lo mueves al .cpp, el compilador no sabrá cómo generar 
-    // las versiones para int, double, etc., en otros archivos.
     Token& update(token_t t, auto v) {
         this->token_name = _token_n[t];
         this->token_type = t;

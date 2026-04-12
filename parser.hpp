@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ast.hpp"
+#include "combinators.hpp"
 
 #include <functional>
 

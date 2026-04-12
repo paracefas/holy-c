@@ -1,9 +1,12 @@
 #pragma once
 
-#include <print>
+#define FMT_HEADER_ONLY
+#include <fmt/core.h>
 #include <tuple>
-#include <memory>
 #include <vector>
+#include <expected>
+#include <filesystem>
+#include <string>
 
 template <typename T>
 struct std::formatter<std::optional<T>> {
@@ -58,21 +61,11 @@ struct std::formatter<std::tuple<Ts...>> {
     }
 };
 
-#include <expected>
-#include <filesystem>
-#include <fstream>
-#include <string>
-
 enum class FileError { NotFound, ReadFailed };
 
-std::expected<std::string, FileError> load_source(std::filesystem::path path) {
-    if (!std::filesystem::exists(path)) 
-        return std::unexpected(FileError::NotFound);
-
-    std::ifstream ifs(path, std::ios::binary);
-    if (!ifs) 
-        return std::unexpected(FileError::ReadFailed);
-
-    return std::string((std::istreambuf_iterator<char>(ifs)),
-                        std::istreambuf_iterator<char>());
-}
+std::expected<std::string, FileError> load_source(std::filesystem::path path);
+#ifdef DEBUG_MODE
+    #define PRINT(fmt_str, ...) fmt::print("[DEBUG {} ({})]: " fmt_str "\n", __FILE__, __LINE__, ##__VA_ARGS__)
+#else
+    #define PRINT(...) 
+#endif

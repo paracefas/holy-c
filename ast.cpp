@@ -1,9 +1,7 @@
 #include "ast.hpp"
 
-#include <print>
 #include <unordered_map>
 
-// [ token_t::PAR_OP ] == "Token name: PAR_OP"
 std::unordered_map<token_t, std::string> _token_n = {
 #define AS_MAP(id, name) { token_t::id, "token name: " name },
     TOKEN_LIST(AS_MAP)
