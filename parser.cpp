@@ -9,7 +9,6 @@ ParserFunc match (token_t expected) {
         trimmed.erase(0, trimmed.find_first_not_of(" \t\n\r"));
         
         if (trimmed.empty()) return {std::nullopt, in};
-        PRINT("[lexer: match] - {}", trimmed);
         auto [res, rest] = lexer(trimmed); 
         
         if (res && std::get<0>(*res).token_type == expected) {
@@ -108,35 +107,75 @@ Result<char> parseOp (std::string in) {
     return p(in);
 } 
 
-Result<Expr> parseBinaryOp (std::string in) {
+// Result<Expr> parseBinaryOp2 (std::string in) {
+//     static auto p = map(
+//         seq(
+//             match(token_t::INT),
+//             parseOp,
+//             match(token_t::INT)
+//         ),
+//         [](Token lhs, char op, Token rhs) -> Expr {
+//             Expr a = std::get<int>(lhs.token_value);
+//             Expr b = std::get<int>(rhs.token_value);
+//             return RecursiveWrapper<BinaryOp>{BinaryOp{a, b, op}};
+//         }
+//     );
+
+//     return p(in);
+// }
+
+// f(...)
+Result<Expr> parseFuncCall (std::string in) {
     static auto p = map(
         seq(
-            match(token_t::INT),
-            parseOp,
-            match(token_t::INT)
+            parseID,
+            parseParOpn,
+            parseParCls
         ),
-        [](Token lhs, char op, Token rhs) -> Expr {
-            PRINT("Parsing binop");
-            Expr a = std::get<int>(lhs.token_value);
-            Expr b = std::get<int>(rhs.token_value);
-            PRINT("\t{} {} {}", std::get<int>(a), op, std::get<int>(b));
-            return RecursiveWrapper<BinaryOp>{BinaryOp{a, b, op}};
+        [] (std::string id, std::monostate, std::monostate) -> Expr {
+            PRINT("Parsing function calling... {}", id);
+            return FunctionCall{id, {}};
         }
     );
+    return p(in);
+}
 
+Result<Expr> parseBinaryExpr (std::string in);
+
+Result<Expr> parsePrimaryExpr(std::string in) {
+    static auto p = choice(
+        parseFuncCall, 
+        map(parseDouble, [](double d) -> Expr { return d; }),
+        map(parseInt, [](int i) -> Expr { return i; }),
+        map(parseStr, [](std::string s) -> Expr { return s; })
+    );
+    return p(in);
+}
+
+Result<Expr> parseBinaryExpr (std::string in) {
+    static auto p = map(
+        seq(
+            parsePrimaryExpr, 
+            parseOp, 
+            parseExpr
+        ),
+        [] (Expr lhs, char op, Expr rhs) -> Expr {
+            return BinaryOp{lhs, rhs, op}; 
+        }
+    );
     return p(in);
 }
 
 Result<Expr> parseExpr (std::string in) {
-    static auto p = choice(
-        parseBinaryOp,
-        map(parseDouble, [](double d) -> Expr {return d;}),
-        map(parseInt, [](int i) -> Expr {return i;}),
-        map(parseStr, [](std::string s) -> Expr {return s;})
-    );
-
+    static auto p = choice(parseBinaryExpr, parsePrimaryExpr);
     return p(in);
 }
+
+/**
+ * (Expr) + (Expr)
+ * (Expr)
+ */
+
 
 Result<std::string> parseID (std::string in) { 
     static auto p = map(
@@ -179,18 +218,7 @@ Result<Stmt> parseReturn (std::string in) {
         seq(keyword("return"), parseExpr),
         [](Token, auto val) -> Stmt {
             Expr valr = val;
-            if (auto* wrapper = std::get_if<RecursiveWrapper<BinaryOp>>(&valr)) {
-                const BinaryOp& op = wrapper->get();
-                
-                if (auto* l_val = std::get_if<int>(&op.lhs)) {
-                    PRINT("Parsing return con primer operando: {}", *l_val);
-                } else {
-                    PRINT("Parsing return con operando izquierdo complejo.");
-                }
-            } else if (auto* i_val = std::get_if<int>(&valr)) {
-                PRINT("Parsing return simple: {}", *i_val);
-            }
-
+            //PRINT("Parsing return {} '{}' {}", lhs, op, rhs);
             return make_stmt(ReturnStmt{ valr });
         }
     );
@@ -297,7 +325,6 @@ Result<Stmt> parseLet (std::string in) {
             parseExpr
         ),
         [] (Token, std::string id, char, token_t t, char, Expr expr) -> Stmt {
-            PRINT("Parsing let {}, type: {}", id, _token_n[t]);
             return make_stmt(Expr{Let{id, t, expr}});
         }
     );
@@ -323,8 +350,6 @@ Result<Stmt> parseConst1 (std::string in) {
             parseExpr
         ),
         [] (std::string id, std::string, Expr expr) -> Stmt {
-            PRINT("Parsing const {}, type: {}", id, _token_n[token_t::INFER]);
-            
             return make_stmt(Expr{Const{id, token_t::INFER, expr}});
         }
     );
@@ -343,7 +368,6 @@ Result<Stmt> parseConst0 (std::string in) {
             parseExpr
         ),
         [] (Token, std::string id, char, token_t t, char, Expr expr) -> Stmt {
-            PRINT("Parsing const {}, type: {}", id, _token_n[t]);
             return make_stmt(Expr{Const{id, t, expr}});
         }
     );
@@ -357,7 +381,7 @@ Result<Stmt> parseConst (std::string in) {
 }
 
 Result<Stmt> parseStmt (std::string in) {
-    static auto p = choice(parseLet, parseConst, parseReturn);
+    static auto p = choice(parseLet, parseConst, parseReturn, parseFuncCall);
     return p(in);
 }
 
@@ -385,8 +409,11 @@ Result<Stmt> parseFunc1 (std::string in) {
             parseExpr
         ),
         [] (Token, std::string id, char, Expr ret) -> Stmt {
-            PRINT("Parsing {}", id);
-            return make_stmt(FunctionDef{id, {}, {Stmt{ret}}});
+            ReturnStmt rs {ret};
+            RecursiveWrapper<ReturnStmt> wrs{rs};
+            std::vector<Stmt> body;
+            body.push_back(Stmt{wrs});
+            return make_stmt(FunctionDef{id, {}, body});
         }
     );
 
@@ -404,7 +431,6 @@ Result<Stmt> parseFunc2 (std::string in) {
             parseBlock
         ),
         [](Token, std::string id, std::monostate, std::vector<FunctionArg> args, std::monostate, std::vector<Stmt> body) -> Stmt {
-            PRINT("Parsing func");
             return make_stmt(FunctionDef{id, std::move(args), std::move(body)});
         }
     );

@@ -36,10 +36,11 @@ std::string to_string(const Inst& i) {
 
 using AsmStream = std::vector<Inst>;
 
+const std::vector<Operand> X64_REGS = {Reg{"rcx"}, Reg{"rdx"}, Reg{"r8"}, Reg{"r9"}};
+
 struct FasmGenerator {
     AsmStream operator()(const RecursiveWrapper<ReturnStmt>& r) const {
         AsmStream code = std::visit(*this, r.get().value); 
-        code.push_back({"call", {std::string("ExitProcess"), {}}});
         return code;
     }
 
@@ -56,15 +57,44 @@ struct FasmGenerator {
         const auto& fn = f.get();
         AsmStream code;
         
-        std::string label_name = (fn.name == "main") ? "start" : fn.name;
-
-        code.push_back({"label", {label_name}});
-        code.push_back({"sub",   {Reg{"rsp"}, Imm{40}}}); // Shadow space + align
+        if (fn.name == "main") {
+            code.push_back({"label", {std::string("start")}});
+            code.push_back({"sub", {Reg{"rsp"}, Imm{40}}}); 
+        } else {
+            code.push_back({"label", {fn.name}});
+        }
 
         for (const auto& stmt : fn.body) {
             auto stmt_code = std::visit(*this, stmt);
             code.insert(code.end(), stmt_code.begin(), stmt_code.end());
         }
+
+        if (fn.name == "main") code.push_back({"invoke", {std::string("ExitProcess"), Reg{"rax"}}});
+        else code.push_back({"ret", {}});
+        
+        return code;
+    }
+
+    AsmStream operator()(const RecursiveWrapper<FunctionCall>& fc) const {
+        AsmStream code;
+        const auto& call = fc.get();
+
+        for (size_t i = 0; i < call.args.size(); ++i) {
+            AsmStream arg_expr = std::visit(*this, call.args[i]);
+            code.insert(code.end(), arg_expr.begin(), arg_expr.end());
+
+            if (i < X64_REGS.size()) code.push_back({"mov", {X64_REGS[i], "rax"}});
+            else code.push_back({"push", {"rax"}}); 
+        }
+
+        std::vector<Operand> invoke_args;
+        invoke_args.push_back(call.name);
+        
+        for (size_t i = 0; i < call.args.size() && i < X64_REGS.size(); ++i)
+            invoke_args.push_back(X64_REGS[i]);
+
+        if (call.name == "ExitProcess") code.push_back(Inst{"invoke", invoke_args});
+        else code.push_back(Inst{"call", invoke_args});
         
         return code;
     }
@@ -74,7 +104,7 @@ struct FasmGenerator {
     }
 
     AsmStream operator()(int i) const {
-        return { {"mov", {Reg{"rcx"}, Imm{i}}} };
+        return { {"mov", {Reg{"rax"}, Imm{i}}} };
     }
 
     AsmStream operator()(double d) const {
@@ -84,10 +114,6 @@ struct FasmGenerator {
     AsmStream operator()(const std::string& s) const {
         return { {"; literal string no soportado aun", {}} };
     }
-
-    AsmStream operator()(const RecursiveWrapper<FunctionCall>& fc) const {
-        return { {"; llamada a funcion no soportada aun", {}} };
-    }
 };
 
 #include <sstream>
@@ -96,6 +122,7 @@ std::string finalize_fasm_code(const AsmStream& instructions) {
     std::stringstream ss;
 
     ss << "format PE64 CONSOLE\n";
+    ss << "include 'win64a.inc'\n";
     ss << "entry start\n";
 
     ss << "section '.text' code readable executable\n";
@@ -104,9 +131,13 @@ std::string finalize_fasm_code(const AsmStream& instructions) {
         if (inst.op == "label") {
             ss << std::visit(OperandPrinter{}, inst.args[0]) << ":\n";
         } 
-        else if (inst.op == "call") {
-            ss << "    call [" << std::visit(OperandPrinter{}, inst.args[0]);
-            ss << "]\n";
+        else if (inst.op == "invoke") {
+            ss << "    " << inst.op << " ";
+            for (size_t i = 0; i < inst.args.size(); ++i) {
+                ss << std::visit(OperandPrinter{}, inst.args[i]);
+                if (i < inst.args.size() - 1) ss << ", ";
+            }
+            ss << '\n';
         }
         else {
             ss << "    " << inst.op << " ";
@@ -119,15 +150,8 @@ std::string finalize_fasm_code(const AsmStream& instructions) {
     }
 
     ss << "\nsection '.idata' import data readable\n";
-
-    ss << "\tdd 0,0,0, RVA kernel_name, RVA kernel_table\n";
-    ss << "\tdd 0,0,0,0,0\n";
-    ss << "\tkernel_table:\n";
-    ss << "\t\tExitProcess dq RVA _ExitProcess\n";
-    ss << "\t\tdq 0\n";
-    ss << "\tkernel_name db 'KERNEL32.DLL',0\n";
-    ss << "\t_ExitProcess dw 0\n";
-    ss << "\t\tdb 'ExitProcess',0\n";
+    ss << "library kernel32,'KERNEL32.DLL'\n";
+    ss << "import kernel32,ExitProcess,'ExitProcess'\n";
 
     return ss.str();
 }
