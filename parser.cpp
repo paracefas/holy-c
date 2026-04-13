@@ -305,8 +305,59 @@ Result<Stmt> parseLet (std::string in) {
     return p(in);
 }
 
+Result<std::string> parseColonAssign (std::string in) {
+    static auto p = map(
+        match(token_t::COLON_ASSIGN),
+        [] (Token) -> std::string { return ":="; }
+    );
+
+    return p(in);
+}
+
+// Parsing x := 3 <=> const x : int = 3
+Result<Stmt> parseConst1 (std::string in) {
+    static auto p = map(
+        seq(
+            parseID,
+            parseColonAssign,
+            parseExpr
+        ),
+        [] (std::string id, std::string, Expr expr) -> Stmt {
+            PRINT("Parsing const {}, type: {}", id, _token_n[token_t::INFER]);
+            
+            return make_stmt(Expr{Const{id, token_t::INFER, expr}});
+        }
+    );
+
+    return p(in);
+}
+
+Result<Stmt> parseConst0 (std::string in) {
+    static auto p = map(
+        seq(
+            keyword("const"),
+            parseID,
+            parseColon,
+            parseType,
+            parseAssignation,
+            parseExpr
+        ),
+        [] (Token, std::string id, char, token_t t, char, Expr expr) -> Stmt {
+            PRINT("Parsing const {}, type: {}", id, _token_n[t]);
+            return make_stmt(Expr{Const{id, t, expr}});
+        }
+    );
+
+    return p(in);
+}
+
+Result<Stmt> parseConst (std::string in) {
+    static auto p = choice(parseConst0, parseConst1);
+    return p(in);
+}
+
 Result<Stmt> parseStmt (std::string in) {
-    static auto p = choice(parseLet, parseReturn);
+    static auto p = choice(parseLet, parseConst, parseReturn);
     return p(in);
 }
 
@@ -367,6 +418,6 @@ Result<Stmt> parseFunc (std::string in) {
 }
 
 Result<std::vector<Stmt>> parse (std::string in) {
-    static auto p = many(choice(parseLet, parseFunc, parseReturn));
+    static auto p = many(choice(parseLet, parseConst, parseFunc, parseReturn));
     return p(in);
 }

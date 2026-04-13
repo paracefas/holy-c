@@ -18,6 +18,7 @@
 	X(INT, "INT") \
     X(KEYWORD, "KEYWORD") \
     X(DOUBLE, "DOUBLE") \
+    X(INFER, "INFER") \
     X(SYM, "Symbol") \
     X(COMMA, "COMMA") \
     X(SEMI, "SEMICOLON") \
@@ -32,6 +33,7 @@
     X(STR_TYPE, "STR_TYPE") \
     X(LET, "LET") \
     X(CONST, "CONST") \
+    X(COLON_ASSIGN, "COLON_ASSIGN") \
 	X(EoF, "End of File")
 
 enum class token_t {

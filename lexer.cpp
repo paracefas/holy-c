@@ -58,7 +58,12 @@ Result<Token> lexSymbol (std::string in) {
     if (c == '*') return { std::tuple{Token(token_t::MULT, "*")}, in.substr(1) };
     if (c == '/') return { std::tuple{Token(token_t::DIV, "/")}, in.substr(1) };
     if (c == '=') return { std::tuple{Token(token_t::EQ, "=")}, in.substr(1) };
-    if (c == ':') return { std::tuple{Token(token_t::COLON, ":")}, in.substr(1) };
+    if (c == ':') {
+        //parsing :=
+        if(in.size() >= 2 && in[1] == '=') return { std::tuple{Token(token_t::COLON_ASSIGN, ":=")}, in.substr(2) };
+        //parsing :
+        return { std::tuple{Token(token_t::COLON, ":")}, in.substr(1) };
+    }
     return {std::nullopt, in};
 }
 

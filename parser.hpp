@@ -32,6 +32,7 @@ Result<char> parseAssignation (std::string in);
 Result<char> parseColon (std::string in);
 Result<token_t> parseType (std::string in);
 Result<Stmt> parseLet (std::string in);
+Result<Stmt> parseConst (std::string in);
 Result<Stmt> parseStmt (std::string in);
 Result<std::vector<Stmt>> parseBlock (std::string in);
 Result<Stmt> parseFunc1 (std::string in);
