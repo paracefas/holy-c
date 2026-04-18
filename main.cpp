@@ -10,22 +10,23 @@ int main(int argc, char const** argv) {
     if (ast) {
         auto& [program] = *ast;
         
-        std::ofstream out{"out.s"};
-        if(!out) {
-            PRINT("Error: No se pudo crear el archivo");
+        LLVMGenerator ir;
+        ir(program);
+        std::error_code ec;
+        llvm::raw_fd_ostream dest("output.ll", ec);
+
+        if (ec) {
+            std::println("Error abriendo archivo para escribir: {}", ec.message());
             return 1;
         }
-        out << ";out.s\n";
-        out.close();
-        FasmGenerator fasm;
-        // AsmStream strm{fasm(program)};
-        // out << finalize_fasm_code(strm);
-        
-        
-        PRINT("Exito");
-        PRINT("Program: {}", program.size());
+
+        // Suponiendo que tu módulo se llama 'module' dentro de LLVMGenerator
+        // y tienes un método público para obtenerlo o imprimirlo:
+        ir.dump(dest); 
+
+        std::println("Exito: archivo output.ll generado.");
     } else {
-        PRINT("Error de parseo.");
+        std::println("Error de parseo.");
     }
     return 0;
 }

@@ -36,18 +36,20 @@ std::string to_string(const Inst& i) {
 
 using AsmStream = std::vector<Inst>;
 
-const std::vector<Operand> X64_REGS = {Reg{"rcx"}, Reg{"rdx"}, Reg{"r8"}, Reg{"r9"}};
+static const std::vector<Operand> X64_REGS = {Reg{"rax"}, Reg{"rcx"}, Reg{"rdx"}, Reg{"r8"}, Reg{"r9"}, Reg{"r10"}, Reg{"r11"}};
 
 struct FasmGenerator {
-    AsmStream operator()(const RecursiveWrapper<ReturnStmt>& r) const {
-        AsmStream code = std::visit(*this, r.get().value); 
+    AsmStream operator()(const RecursiveWrapper<ReturnStmt>& r, size_t reg_idx) const {
+        AsmStream code = gen(r.get().value, reg_idx); 
+        if(reg_idx) // if it's not rax, move to rax
+            code.push_back({"mov", {X64_REGS[0], X64_REGS[reg_idx]}});
         return code;
     }
 
     AsmStream operator()(const std::vector<Stmt>& program) const {
         AsmStream total_code;
         for (const auto& node : program) {
-            auto code = std::visit(*this, node);
+            auto code = gen(node, 0);
             total_code.insert(total_code.end(), code.begin(), code.end());
         }
         return total_code;
@@ -65,7 +67,7 @@ struct FasmGenerator {
         }
 
         for (const auto& stmt : fn.body) {
-            auto stmt_code = std::visit(*this, stmt);
+            auto stmt_code = gen(stmt, 0);
             code.insert(code.end(), stmt_code.begin(), stmt_code.end());
         }
 
@@ -99,12 +101,39 @@ struct FasmGenerator {
         return code;
     }
 
+    AsmStream operator()(const RecursiveWrapper<BinaryOp>& rb, size_t reg_idx) const {
+        const BinaryOp& b = rb.get();
+        AsmStream ret, lhs, rhs;
+        // Rax, Imm (lhs)
+        lhs = gen(b.lhs, reg_idx);
+        
+        ret.insert(ret.end(), lhs.begin(), lhs.end());
+
+        rhs = gen(b.rhs, reg_idx+1);
+
+        ret.insert(ret.end(), rhs.begin(), rhs.end());
+        
+        Operand target = X64_REGS[reg_idx];
+        Operand source = X64_REGS[reg_idx+1];
+
+        if (b.op == '+') 
+            ret.push_back({"add", {target, source}});
+        else if (b.op == '-')
+            ret.push_back({"sub", {target, source}});
+        else if (b.op == '/')
+            ret.push_back({"div", {target, source}});
+        else if (b.op == '*')
+            ret.push_back({"imul", {target, source}});
+
+        return ret;
+    }
+
     AsmStream operator()(const Expr& e) const {
         return std::visit(*this, e);
     }
 
-    AsmStream operator()(int i) const {
-        return { {"mov", {Reg{"rax"}, Imm{i}}} };
+    AsmStream operator()(int i, size_t reg_idx) const {
+        return { {"mov", {X64_REGS[reg_idx], Imm{i}}} };
     }
 
     AsmStream operator()(double d) const {
@@ -113,6 +142,14 @@ struct FasmGenerator {
 
     AsmStream operator()(const std::string& s) const {
         return { {"; literal string no soportado aun", {}} };
+    }
+private:
+    AsmStream gen (const auto& node, size_t reg_idx) const {
+        return std::visit([&](const auto& n) {
+            if constexpr (requires { (*this)(n, reg_idx); })
+                return (*this)(n, reg_idx);
+            return (*this)(n);
+        }, node);
     }
 };
 

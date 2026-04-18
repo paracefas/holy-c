@@ -86,16 +86,26 @@ template<typename T>
 class RecursiveWrapper {
     std::unique_ptr<T> ptr;
 public:
-    RecursiveWrapper(T&& val) : ptr(std::make_unique<T>(std::move(val))) {}
-    RecursiveWrapper(const T& val) : ptr(std::make_unique<T>(val)) {}
-    
-    RecursiveWrapper(const RecursiveWrapper& other) : ptr(std::make_unique<T>(*other.ptr)) {}
+    // Constructores (solo declaración)
+    RecursiveWrapper(T&& val);
+    RecursiveWrapper(const T& val);
+    RecursiveWrapper(const RecursiveWrapper& other);
     RecursiveWrapper(RecursiveWrapper&&) = default;
 
+    // Destructor (solo declaración - ESTO ES LO MÁS IMPORTANTE)
+    ~RecursiveWrapper();
+
+    // Operadores (pueden quedarse aquí porque no borran T)
     operator T&() { return *ptr; }
     operator const T&() const { return *ptr; }
     T& get() { return *ptr; }
     const T& get() const { return *ptr; }
+    
+    RecursiveWrapper& operator=(const RecursiveWrapper& other) {
+        if (this != &other) ptr = std::make_unique<T>(*other.ptr);
+        return *this;
+    }
+    RecursiveWrapper& operator=(RecursiveWrapper&&) = default;
 };
 
 struct FunctionCall;
@@ -107,6 +117,7 @@ struct Let;
 struct Const;
 
 using Expr = std::variant<
+    std::monostate,
     double,
     int, 
     std::string,
@@ -118,6 +129,7 @@ using Expr = std::variant<
     >;
 
 using Stmt = std::variant<
+    std::monostate,
     RecursiveWrapper<FunctionDef>,
     RecursiveWrapper<ReturnStmt>,
     Expr
@@ -134,7 +146,7 @@ struct ReturnStmt {
 
 struct FunctionCall {
     std::string name;
-    std::vector<Stmt> args;
+    std::vector<Expr> args;
 };
 
 struct FunctionDef {
@@ -146,6 +158,7 @@ struct FunctionDef {
 struct FunctionArg {
     std::string name;
     token_t type;
+    Expr value = std::monostate{};
 };
 
 struct BinaryOp {
@@ -175,3 +188,17 @@ struct ASTPrinter {
     std::string operator()(const RecursiveWrapper<FunctionDef>& fp) const;
     std::string operator()(const Expr& e) const;
 };
+
+// --- Al final de ast.hpp, después de que BinaryOp, Let, etc. estén definidos ---
+
+template<typename T>
+RecursiveWrapper<T>::RecursiveWrapper(T&& val) : ptr(std::make_unique<T>(std::move(val))) {}
+
+template<typename T>
+RecursiveWrapper<T>::RecursiveWrapper(const T& val) : ptr(std::make_unique<T>(val)) {}
+
+template<typename T>
+RecursiveWrapper<T>::RecursiveWrapper(const RecursiveWrapper& other) : ptr(std::make_unique<T>(*other.ptr)) {}
+
+template<typename T>
+RecursiveWrapper<T>::~RecursiveWrapper() = default; // Aquí ya sabe cómo borrar T

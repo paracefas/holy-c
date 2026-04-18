@@ -1,7 +1,6 @@
 #pragma once
 
-#define FMT_HEADER_ONLY
-#include <fmt/core.h>
+#include <format>
 #include <tuple>
 #include <vector>
 #include <expected>
@@ -65,7 +64,7 @@ enum class FileError { NotFound, ReadFailed };
 
 std::expected<std::string, FileError> load_source(std::filesystem::path path);
 #ifdef DEBUG_MODE
-    #define PRINT(fmt_str, ...) fmt::print("[DEBUG {} ({})]: " fmt_str "\n", __FILE__, __LINE__, ##__VA_ARGS__)
+    #define PRINT(fmt_str, ...) std::print("[DEBUG {} ({})]: " fmt_str "\n", __FILE__, __LINE__, ##__VA_ARGS__)
 #else
     #define PRINT(...) 
 #endif

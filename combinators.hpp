@@ -1,5 +1,10 @@
 #pragma once
 
+#include <optional>
+#include <tuple>
+#include <string>
+#include <print>
+
 template<typename... Ts>
 using Result = std::pair<std::optional<std::tuple<Ts...>>, std::string>;
 

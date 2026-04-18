@@ -107,22 +107,15 @@ Result<char> parseOp (std::string in) {
     return p(in);
 } 
 
-// Result<Expr> parseBinaryOp2 (std::string in) {
-//     static auto p = map(
-//         seq(
-//             match(token_t::INT),
-//             parseOp,
-//             match(token_t::INT)
-//         ),
-//         [](Token lhs, char op, Token rhs) -> Expr {
-//             Expr a = std::get<int>(lhs.token_value);
-//             Expr b = std::get<int>(rhs.token_value);
-//             return RecursiveWrapper<BinaryOp>{BinaryOp{a, b, op}};
-//         }
-//     );
-
+// Result<FunctionArg> parseSingleArgCall (std::string in) {
+//     static auto p = 
 //     return p(in);
 // }
+
+Result<std::vector<Expr>> parseArgsCall (std::string in) {
+    static auto p = many(seq(parseExpr, parseComma));
+    return p(in);
+}
 
 // f(...)
 Result<Expr> parseFuncCall (std::string in) {
@@ -130,11 +123,12 @@ Result<Expr> parseFuncCall (std::string in) {
         seq(
             parseID,
             parseParOpn,
+            parseArgsCall,
             parseParCls
         ),
-        [] (std::string id, std::monostate, std::monostate) -> Expr {
+        [] (std::string id, std::monostate, std::vector<Expr> args, std::monostate) -> Expr {
             PRINT("Parsing function calling... {}", id);
-            return FunctionCall{id, {}};
+            return FunctionCall{id, args};
         }
     );
     return p(in);
@@ -431,6 +425,7 @@ Result<Stmt> parseFunc2 (std::string in) {
             parseBlock
         ),
         [](Token, std::string id, std::monostate, std::vector<FunctionArg> args, std::monostate, std::vector<Stmt> body) -> Stmt {
+            PRINT("arg(0): {}, typeof(arg(0)): {}", args[0].name, _token_n[args[0].type]);
             return make_stmt(FunctionDef{id, std::move(args), std::move(body)});
         }
     );

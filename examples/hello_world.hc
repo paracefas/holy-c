@@ -1,5 +1,1 @@
-func f = 4+3+2-2
-
-func main(){
-    return 2
-}
+func main = 24*2+1
