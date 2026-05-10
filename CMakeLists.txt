@@ -1,42 +1,35 @@
 cmake_minimum_required(VERSION 3.15)
 project(parser)
 
-set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build" FORCE)
+set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
 
-if(MSVC OR (WIN32 AND "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang"))
-    add_compile_definitions(_ITERATOR_DEBUG_LEVEL=0)
-    add_compile_definitions(_HAS_ITERATOR_DEBUGGING=0)
-endif()
+# 1. Rutas
+set(LLVM_ROOT "C:/LLVM/llvm")
+set(VS_INSIDER_DIA "C:/Program Files/Microsoft Visual Studio/18/Insiders/DIA SDK/lib/amd64/diaguids.lib")
 
-set(CMAKE_CXX_STANDARD 26)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
-
-set(LLVM_ROOT "C:/LLVM/llvm") 
-set(LLVM_LIB_DIR "${LLVM_ROOT}/lib")
+# 2. Buscar LLVM
+find_package(LLVM REQUIRED CONFIG PATHS "${LLVM_ROOT}" NO_DEFAULT_PATH)
 include_directories(SYSTEM BEFORE "${LLVM_ROOT}/include")
-
-include_directories(SYSTEM "C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/ucrt")
-include_directories(SYSTEM "C:/Program Files/Microsoft Visual Studio/18/Insiders/VC/Tools/MSVC/14.51.36231/include")
-
-add_executable(holy-c main.cpp ast.cpp lexer.cpp parser.cpp util.cpp)
+add_definitions(${LLVM_DEFINITIONS})
 
 # 3. Librerías
-link_directories("${LLVM_ROOT}/lib")
+llvm_map_components_to_libnames(llvm_libs core support target native codegen mc all-targets)
+
+# 4. Ejecutable
+add_executable(holy-c main.cpp ast.cpp lexer.cpp parser.cpp util.cpp)
+
+# 5. Linkeo (Pasamos las librerías como lista de strings, no como targets, para saltarnos sus dependencias internas)
 target_link_libraries(holy-c PRIVATE 
-    "${LLVM_LIB_DIR}/LLVMRemarks.lib"
-    "${LLVM_LIB_DIR}/LLVMCore.lib"
-    "${LLVM_LIB_DIR}/LLVMBitReader.lib"
-    "${LLVM_LIB_DIR}/LLVMBitstreamReader.lib"
-    "${LLVM_LIB_DIR}/LLVMBinaryFormat.lib"
-    "${LLVM_LIB_DIR}/LLVMTargetParser.lib"
-    "${LLVM_LIB_DIR}/LLVMSupport.lib"
-    "${LLVM_LIB_DIR}/LLVMDemangle.lib"
+    ${llvm_libs}
+    "${VS_INSIDER_DIA}"
     ntdll.lib
     psapi.lib
     shell32.lib
     advapi32.lib
-    libcmt.lib
 )
-message(STATUS "Usando librerías desde: ${LLVM_LIB_DIR}")
+
+# 6. Forzar al linker a ignorar la ruta maldita
+set_target_properties(holy-c PROPERTIES 
+    LINK_FLAGS "/NODEFAULTLIB:diaguids.lib /IGNORE:4099"
+)

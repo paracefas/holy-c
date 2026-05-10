@@ -9,22 +9,8 @@ int main(int argc, char const** argv) {
 
     if (ast) {
         auto& [program] = *ast;
+        std::println("Exito: archivo {} parsed: {}", argv[1], program.size());
         
-        LLVMGenerator ir;
-        ir(program);
-        std::error_code ec;
-        llvm::raw_fd_ostream dest("output.ll", ec);
-
-        if (ec) {
-            std::println("Error abriendo archivo para escribir: {}", ec.message());
-            return 1;
-        }
-
-        // Suponiendo que tu módulo se llama 'module' dentro de LLVMGenerator
-        // y tienes un método público para obtenerlo o imprimirlo:
-        ir.dump(dest); 
-
-        std::println("Exito: archivo output.ll generado.");
     } else {
         std::println("Error de parseo.");
     }

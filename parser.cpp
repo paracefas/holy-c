@@ -107,11 +107,6 @@ Result<char> parseOp (std::string in) {
     return p(in);
 } 
 
-// Result<FunctionArg> parseSingleArgCall (std::string in) {
-//     static auto p = 
-//     return p(in);
-// }
-
 Result<std::vector<Expr>> parseArgsCall (std::string in) {
     static auto p = many(seq(parseExpr, parseComma));
     return p(in);
@@ -127,8 +122,27 @@ Result<Expr> parseFuncCall (std::string in) {
             parseParCls
         ),
         [] (std::string id, std::monostate, std::vector<Expr> args, std::monostate) -> Expr {
-            PRINT("Parsing function calling... {}", id);
             return FunctionCall{id, args};
+        }
+    );
+    return p(in);
+}
+
+Result<std::string> parseID (std::string in) { 
+    static auto p = map(
+        match(token_t::IDENTIFIER),
+        [](Token t) -> std::string {
+            return std::get<std::string>(t.token_value);
+        }
+    );
+    return p(in);
+}
+
+Result<Expr> parseName (std::string in) {
+    static auto p = map(
+        parseID,
+        [](std::string id) -> Expr {
+            return id;
         }
     );
     return p(in);
@@ -138,7 +152,8 @@ Result<Expr> parseBinaryExpr (std::string in);
 
 Result<Expr> parsePrimaryExpr(std::string in) {
     static auto p = choice(
-        parseFuncCall, 
+        parseFuncCall,
+        parseName, 
         map(parseDouble, [](double d) -> Expr { return d; }),
         map(parseInt, [](int i) -> Expr { return i; }),
         map(parseStr, [](std::string s) -> Expr { return s; })
@@ -171,15 +186,7 @@ Result<Expr> parseExpr (std::string in) {
  */
 
 
-Result<std::string> parseID (std::string in) { 
-    static auto p = map(
-        match(token_t::IDENTIFIER),
-        [](Token t) -> std::string {
-            return std::get<std::string>(t.token_value);
-        }
-    );
-    return p(in);
-}
+
 
 Result<std::monostate> parseCurlyOpn (std::string in) {
     static auto p = map(
@@ -212,7 +219,6 @@ Result<Stmt> parseReturn (std::string in) {
         seq(keyword("return"), parseExpr),
         [](Token, auto val) -> Stmt {
             Expr valr = val;
-            //PRINT("Parsing return {} '{}' {}", lhs, op, rhs);
             return make_stmt(ReturnStmt{ valr });
         }
     );
@@ -425,7 +431,6 @@ Result<Stmt> parseFunc2 (std::string in) {
             parseBlock
         ),
         [](Token, std::string id, std::monostate, std::vector<FunctionArg> args, std::monostate, std::vector<Stmt> body) -> Stmt {
-            PRINT("arg(0): {}, typeof(arg(0)): {}", args[0].name, _token_n[args[0].type]);
             return make_stmt(FunctionDef{id, std::move(args), std::move(body)});
         }
     );

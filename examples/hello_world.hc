@@ -1,1 +1,6 @@
-func main = 24*2+1
+func main() {
+    let x : int = 4
+    y := 7
+    z := x+y
+    return z
+}
